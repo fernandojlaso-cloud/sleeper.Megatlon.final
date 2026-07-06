@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Back Office · Seguimiento Sleepers Megatlon</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0F1115; --panel:#171A20; --panel-2:#1E222A; --line:#2A2F3A;
+    --text:#EDEFF3; --muted:#8B92A3; --accent:#F97316; --accent-2:#FB923C; --ok:#3DD68C;
+    --warn:#F2B84B; --danger:#FF5D5D; --wa:#25D366; --radius:10px;
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--text); -webkit-font-smoothing:antialiased;}
+  .icon{width:15px; height:15px; vertical-align:-3px; flex-shrink:0;}
+  .icon-lg{width:18px; height:18px; vertical-align:-4px;}
+  .dot{display:inline-block; width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .dot.verde{background:var(--ok);}
+  .dot.amarillo{background:var(--warn);}
+  .dot.rojo{background:var(--danger);}
+  .dot.recuperado{background:var(--ok);}
+  .wrap{max-width:1500px; margin:0 auto; padding:28px 24px 90px;}
+
+  header.top{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    border-bottom:1px solid var(--line); padding-bottom:20px; margin-bottom:22px; flex-wrap:wrap; gap:16px;
+  }
+  .brand{display:flex; align-items:center; gap:14px;}
+  .brand-mark{width:42px; height:42px; border-radius:10px; background:var(--accent);
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:18px; color:#fff; flex-shrink:0;}
+  .brand-text h1{margin:0; font-size:19px; font-weight:700; letter-spacing:-0.2px;}
+  .brand-text p{margin:2px 0 0; font-size:12.5px; color:var(--muted);}
+  .top-meta{text-align:right; font-size:12px; color:var(--muted); line-height:1.6;}
+
+  .section-title{font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 12px; font-weight:600; display:flex; align-items:center; justify-content:space-between;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px;}
+
+  /* ---- Back office panel ---- */
+  .backoffice{margin-bottom:26px;}
+  .admin-panel{background:var(--panel); border:1px solid var(--accent); border-radius:var(--radius); padding:20px; margin-bottom:26px;}
+  .bo-toggle{background:var(--panel); border:1px solid var(--line); color:var(--text); font-size:13px; font-weight:600; padding:10px 16px; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:8px; width:100%; justify-content:space-between; margin-bottom:0;}
+  .bo-toggle:hover{border-color:var(--accent);}
+  .bo-body{border:1px solid var(--line); border-top:none; border-radius:0 0 var(--radius) var(--radius); padding:20px; background:var(--panel); display:none;}
+  .bo-body.open{display:block;}
+  .bo-toggle.open{border-radius:var(--radius) var(--radius) 0 0;}
+  #bo-arrow svg{transition:transform .2s ease;}
+  .bo-toggle.open #bo-arrow svg{transform:rotate(180deg);}
+
+  .settings-row{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px;}
+  .settings-row-3{grid-template-columns:1fr 1fr 1fr;}
+  @media (max-width:700px){.settings-row, .settings-row-3{grid-template-columns:1fr;}}
+  .field label{display:block; font-size:11.5px; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.04em;}
+
+  .upload-row{display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:6px;}
+  .file-label{background:var(--accent); color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; border:none;}
+  .file-label:hover{filter:brightness(1.08);}
+  .ghost-btn{background:none; border:1px solid var(--line); color:var(--text); padding:10px 16px; border-radius:8px; font-size:12.5px; cursor:pointer;}
+  .ghost-btn:hover{border-color:var(--accent);}
+  .hint{font-size:11.5px; color:var(--muted); margin-top:8px;}
+  #file-input{display:none;}
+
+  .preview-wrap{margin-top:18px; display:none;}
+  .preview-wrap.show{display:block;}
+  .bo-divider{display:flex; align-items:center; gap:12px; margin:22px 0 16px; color:var(--muted); font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;}
+  .bo-divider::before, .bo-divider::after{content:''; flex:1; height:1px; background:var(--line);}
+  .manual-row{display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;}
+  .manual-row .field{flex:1; min-width:150px;}
+  .preview-table{width:100%; border-collapse:collapse; font-size:12.5px; margin-bottom:14px;}
+  .preview-table th{text-align:left; padding:8px 10px; color:var(--muted); border-bottom:1px solid var(--line); font-weight:600; text-transform:uppercase; font-size:10.5px;}
+  .preview-table td{padding:8px 10px; border-bottom:1px solid var(--line);}
+  .confirm-btn{background:var(--ok); color:#0F1115; border:none; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer;}
+  .cancel-btn{background:none; border:1px solid var(--line); color:var(--muted); padding:10px 16px; border-radius:8px; font-size:12.5px; cursor:pointer; margin-left:8px;}
+
+  /* ---- Filters ---- */
+  .filters{display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:20px;}
+  .filters .field{min-width:160px;}
+  .filters input, .filters select{width:100%;}
+
+  /* ---- Stats ---- */
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:26px;}
+  .stat{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px;}
+  .stat .n{font-size:26px; font-weight:800; letter-spacing:-0.5px;}
+  .stat .l{font-size:11px; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:.04em;}
+  .stat.accent .n{color:var(--accent);} .stat.ok .n{color:var(--ok);} .stat.warn .n{color:var(--warn);} .stat.danger .n{color:var(--danger);}
+
+  .analysis{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:30px;}
+  @media (max-width:800px){.analysis{grid-template-columns:1fr;}}
+  .bar-row{display:flex; align-items:center; gap:10px; margin-bottom:10px; font-size:13px;}
+  .bar-row .lbl{width:150px; flex-shrink:0; color:var(--muted);}
+  .bar-track{flex:1; height:8px; background:var(--panel-2); border-radius:5px; overflow:hidden;}
+  .bar-fill{height:100%; background:linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius:5px; transition:width .3s ease;}
+  .bar-row .val{width:26px; text-align:right; font-weight:700; font-size:12.5px;}
+
+  /* ---- Table ---- */
+  table.main{width:100%; border-collapse:collapse; font-size:12.5px;}
+  .table-wrap{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow-x:auto;}
+  thead th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600; padding:11px 12px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;}
+  tbody td{padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr.dup{background:rgba(255,93,93,0.06);}
+  tbody tr.cerrada{opacity:.55;}
+  tbody tr:hover{background:var(--panel-2);}
+
+  .client-name{font-weight:600; font-size:13px;}
+  .client-sub{font-size:11px; color:var(--muted); margin-top:2px;}
+  .badge{display:inline-flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:20px; white-space:nowrap;}
+  .badge.dup{background:rgba(255,93,93,0.15); color:var(--danger);}
+  .badge.sede{background:var(--panel-2); color:var(--muted); font-weight:600;}
+
+  .msg-btn{background:none; border:1px solid var(--line); color:var(--text); font-size:11px; padding:6px 10px; border-radius:7px; cursor:pointer;}
+  .msg-btn:hover{border-color:var(--accent);}
+  .wa-btn{display:inline-flex; align-items:center; gap:6px; background:var(--wa); color:#fff; text-decoration:none; font-size:11.5px; font-weight:700; padding:7px 11px; border-radius:7px; border:none; cursor:pointer; white-space:nowrap;}
+  .wa-btn:hover{filter:brightness(1.08);}
+  .wa-btn.disabled{background:var(--panel-2); color:var(--muted); cursor:not-allowed; pointer-events:none;}
+
+  select, input[type=text], input[type=date]{background:var(--panel-2); border:1px solid var(--line); color:var(--text); font-size:12px; padding:6px 8px; border-radius:6px; width:100%; min-width:120px;}
+  select:focus, input:focus{outline:none; border-color:var(--accent);}
+
+  .contact-chip{font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:20px; display:inline-block;}
+  .contact-chip.si{background:rgba(255,93,93,.15); color:var(--danger);}
+  .contact-chip.no{background:rgba(61,214,140,.12); color:var(--ok);}
+  .contact-chip.pend{background:var(--panel-2); color:var(--muted);}
+
+  .risk-select.alto{color:var(--danger);} .risk-select.medio{color:var(--warn);} .risk-select.bajo{color:var(--ok);}
+
+  .estado-select{border:1px solid var(--line); font-size:11.5px; font-weight:700; padding:6px 8px; border-radius:7px; cursor:pointer; white-space:nowrap;}
+  .estado-select.abierto{background:rgba(232,67,47,.15); color:var(--accent);}
+  .estado-select.cerrado{background:rgba(61,214,140,.15); color:var(--ok);}
+
+  .seg-warn{color:var(--warn); font-size:10.5px; font-weight:700; margin-top:3px;}
+  .alarma-dot{display:inline-flex; align-items:center; gap:6px; font-size:10.5px; font-weight:700; padding:4px 9px; border-radius:20px; white-space:nowrap;}
+  .alarma-dot.verde{background:rgba(61,214,140,.15); color:var(--ok);}
+  .alarma-dot.amarillo{background:rgba(242,184,75,.18); color:var(--warn);}
+  .alarma-dot.rojo{background:rgba(255,93,93,.15); color:var(--danger);}
+  .alarma-dot.recuperado{background:rgba(61,214,140,.12); color:var(--ok);}
+  .del-btn{background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px;}
+  .del-btn:hover{color:var(--danger);}
+
+  .empty-state{padding:50px 20px; text-align:center; color:var(--muted); font-size:13px;}
+
+  .modal-bg{display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:50; align-items:center; justify-content:center; padding:20px;}
+  .modal-bg.open{display:flex;}
+  .modal{background:var(--panel); border:1px solid var(--line); border-radius:12px; max-width:520px; width:100%; max-height:80vh; overflow-y:auto; padding:22px 24px;}
+  .modal h3{margin:0 0 4px; font-size:15px;}
+  .modal .sub{font-size:12px; color:var(--muted); margin-bottom:14px;}
+  .modal pre{white-space:pre-wrap; font-family:inherit; font-size:13px; line-height:1.6; color:var(--text); margin:0;}
+  .modal-close{margin-top:16px; background:var(--accent); color:#fff; border:none; padding:9px 16px; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer; width:100%;}
+
+  footer{margin-top:28px; font-size:11.5px; color:var(--muted); text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <div class="brand-mark">M</div>
+      <div class="brand-text">
+        <h1>Seguimiento de Sleepers</h1>
+        <p>Megatlon · Todas las sedes</p>
+      </div>
+    </div>
+    <div class="top-meta">
+      Hoy: <b id="fecha-hoy"></b><br>
+      <button class="ghost-btn" id="btn-admin-open" style="margin-top:8px;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg> Panel de administración</button>
+    </div>
+  </header>
+
+  <div class="admin-panel" id="admin-panel" style="display:none;">
+    <div class="section-title" style="margin-bottom:14px;">
+      <span><svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 00-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 005.4-5.4l-2.7 2.7-2.8-.8-.8-2.8z"/></svg> Administración — base completa de socios</span>
+      <button class="ghost-btn" id="btn-admin-close"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg> Cerrar</button>
+    </div>
+    <p class="hint">Acá ves y administrás <b>todos</b> los socios cargados en la base, de todas las sedes, sin ningún filtro aplicado. Podés eliminar en bloque o reasignar de sede.</p>
+    <div class="upload-row" style="margin:14px 0;">
+      <input type="text" id="admin-reasignar-sede" placeholder="Nueva sede para los seleccionados" style="max-width:220px;">
+      <button class="ghost-btn" id="btn-admin-reasignar"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-7.6 7-12.2A7 7 0 105 8.8C5 13.4 12 21 12 21z"/><circle cx="12" cy="9" r="2.4"/></svg> Reasignar sede</button>
+      <button class="cancel-btn" id="btn-admin-delete" style="color:var(--danger); border-color:var(--danger);"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2"/><path d="M6.5 7l1 12.5a2 2 0 002 2h5a2 2 0 002-2L17.5 7"/><path d="M10 11v6M14 11v6"/></svg> Eliminar seleccionados</button>
+      <button class="ghost-btn" id="btn-admin-export"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M12 16l-4-4M12 16l4-4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg> Exportar todo (CSV)</button>
+    </div>
+    <div class="table-wrap" style="max-height:420px; overflow:auto;">
+      <table class="main">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="admin-select-all"></th>
+            <th>Nombre</th>
+            <th>Email</th>
+            <th>Sede</th>
+            <th>Cargado por</th>
+            <th>Fecha carga</th>
+            <th>Motivo</th>
+            <th>Riesgo</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody id="admin-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="backoffice">
+    <button class="bo-toggle" id="bo-toggle">
+      <span><svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5a2 2 0 012-2h4l2 2h8a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7z"/></svg> Back office — cargar nueva planilla de socios</span>
+      <span id="bo-arrow"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+    </button>
+    <div class="bo-body" id="bo-body">
+
+      <div class="settings-row settings-row-3">
+        <div class="field">
+          <label>Tu nombre</label>
+          <input type="text" id="input-gerente" placeholder="Ej: Fernando Laso">
+        </div>
+        <div class="field">
+          <label>Cargo</label>
+          <select id="input-cargo">
+            <option value="">Seleccioná tu cargo</option>
+            <option value="Gerente">Gerente</option>
+            <option value="Gerente de Servicio">Gerente de Servicio</option>
+            <option value="Coordinador de Servicio">Coordinador de Servicio</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Sede</label>
+          <input type="text" id="input-sede" placeholder="Ej: Núñez">
+        </div>
+      </div>
+
+      <div class="upload-row">
+        <label class="file-label" for="file-input"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg> Elegir archivo (.xlsx o .csv)</label>
+        <input type="file" id="file-input" accept=".csv,.xlsx,.xls">
+        <button class="ghost-btn" id="btn-template"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M12 16l-4-4M12 16l4-4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg> Descargar planilla modelo</button>
+        <button class="ghost-btn" id="btn-export"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M12 16l-4-4M12 16l4-4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg> Exportar datos actuales (CSV)</button>
+      </div>
+      <p class="hint">Columnas esperadas: <b>Nombre</b>, <b>Email</b>, <b>Teléfono</b>, <b>Sede</b> (opcional, usa la de arriba si está vacía), <b>Última Visita</b> (opcional). El mensaje de WhatsApp se genera solo con tu nombre y sede.</p>
+
+      <div class="preview-wrap" id="preview-wrap">
+        <p class="section-title">Vista previa (<span id="preview-count">0</span> filas)</p>
+        <div style="max-height:260px; overflow:auto;">
+          <table class="preview-table" id="preview-table"></table>
+        </div>
+        <button class="confirm-btn" id="btn-confirm"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.6 2.6L16 9"/></svg> Confirmar carga</button>
+        <button class="cancel-btn" id="btn-cancel">Cancelar</button>
+      </div>
+
+      <div class="bo-divider">o cargá un socio manualmente</div>
+
+      <div class="manual-row">
+        <div class="field">
+          <label>Nombre</label>
+          <input type="text" id="manual-nombre" placeholder="Nombre y apellido">
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="text" id="manual-email" placeholder="socio@mail.com">
+        </div>
+        <div class="field">
+          <label>Teléfono</label>
+          <input type="text" id="manual-telefono" placeholder="5491122334455">
+        </div>
+        <div class="field">
+          <label>Sede</label>
+          <input type="text" id="manual-sede" placeholder="Usa la sede de arriba si está vacío">
+        </div>
+        <div class="field">
+          <label>Última visita</label>
+          <input type="text" id="manual-visita" placeholder="Opcional">
+        </div>
+        <button class="confirm-btn" id="btn-add-manual" style="align-self:flex-end;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> Agregar socio</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="field">
+      <label>Sede</label>
+      <select id="filter-sede"><option value="">Todas</option></select>
+    </div>
+    <div class="field">
+      <label>Estado</label>
+      <select id="filter-estado">
+        <option value="Abierto" selected>Abiertos</option>
+        <option value="Cerrado">Cerrados</option>
+        <option value="">Todos</option>
+      </select>
+    </div>
+    <div class="field" style="flex:1; min-width:200px;">
+      <label>Buscar</label>
+      <input type="text" id="filter-search" placeholder="Nombre o email...">
+    </div>
+  </div>
+
+  <p class="hint" style="margin:-8px 0 12px;">Las estadísticas siempre muestran el total de socios cargados (incluye recuperados y dados de baja). El filtro de Estado solo afecta al listado de abajo.</p>
+  <div class="stats" id="stats"></div>
+
+  <div class="analysis">
+    <div class="card">
+      <p class="section-title">Distribución por motivo</p>
+      <div id="motivo-bars"></div>
+    </div>
+    <div class="card">
+      <p class="section-title">Nivel de riesgo</p>
+      <div id="riesgo-bars"></div>
+    </div>
+  </div>
+
+  <p class="section-title"><svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v4a4 4 0 01-8 0V4z"/><path d="M8 5H5a3 3 0 003 3M16 5h3a3 3 0 01-3 3"/><path d="M10 14v2.5M14 14v2.5M8 20.5h8M9.2 16.5h5.6l.8 4H8.4l.8-4z"/></svg> Comparativa entre sedes</p>
+  <div class="filters" style="margin-bottom:16px;">
+    <div class="field">
+      <label>Fecha de carga desde</label>
+      <input type="date" id="sede-filter-desde">
+    </div>
+    <div class="field">
+      <label>Fecha de carga hasta</label>
+      <input type="date" id="sede-filter-hasta">
+    </div>
+    <div class="field">
+      <label>Motivo</label>
+      <select id="sede-filter-motivo"><option value="">Todos</option></select>
+    </div>
+    <div class="field">
+      <label>Riesgo</label>
+      <select id="sede-filter-riesgo">
+        <option value="">Todos</option>
+        <option value="Alto">Alto</option>
+        <option value="Medio">Medio</option>
+        <option value="Bajo">Bajo</option>
+      </select>
+    </div>
+    <button class="ghost-btn" id="sede-filter-clear"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg> Limpiar filtros</button>
+  </div>
+  <div class="analysis">
+    <div class="card">
+      <p class="section-title" style="margin-bottom:14px;">Sleepers cargados por sede</p>
+      <div id="sede-cargados-bars"></div>
+    </div>
+    <div class="card">
+      <p class="section-title" style="margin-bottom:14px;">Tasa de recuperación por sede (%)</p>
+      <div id="sede-recup-bars"></div>
+    </div>
+  </div>
+  <div class="table-wrap" style="margin-bottom:30px;">
+    <table class="main">
+      <thead>
+        <tr>
+          <th>Sede</th>
+          <th>Sleepers cargados</th>
+          <th>Socios totales</th>
+          <th>% sobre cartera</th>
+          <th>Respondieron</th>
+          <th>Tasa de respuesta</th>
+          <th>Riesgo alto</th>
+          <th>Reincidentes</th>
+          <th>Abiertos</th>
+          <th>Cerrados (recuperados)</th>
+          <th>Tasa de recuperación</th>
+          <th>Motivo principal</th>
+        </tr>
+      </thead>
+      <tbody id="sede-tbody"></tbody>
+    </table>
+    <div class="empty-state" id="sede-empty-state" style="display:none;">Todavía no hay datos suficientes para comparar sedes.</div>
+  </div>
+
+  <p class="section-title">Listado de socios</p>
+  <div class="table-wrap">
+    <table class="main">
+      <thead>
+        <tr>
+          <th>Alarma</th>
+          <th>Socio</th>
+          <th>Contacto</th>
+          <th>Mensaje</th>
+          <th>Motivo</th>
+          <th>Riesgo</th>
+          <th>Fecha carga</th>
+          <th>Próximo seguimiento</th>
+          <th>Estado</th>
+          <th>Observaciones</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty-state" id="empty-state" style="display:none;">Todavía no cargaste ningún socio. Usá el back office de arriba para subir tu primera planilla.</div>
+  </div>
+
+  <footer>Los datos cargados son compartidos entre todos los gerentes que usan este link. Tu nombre y sede se guardan solo en este navegador.</footer>
+</div>
+
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3 id="modal-name"></h3>
+    <p class="sub">Mensaje que se envía por WhatsApp</p>
+    <pre id="modal-text"></pre>
+    <button class="modal-close" onclick="closeModal()">Cerrar</button>
+  </div>
+</div>
+
+<script>
+// ---------- sistema de íconos (SVG outline, sin emoticones) ----------
+const ICON_PATHS = {
+  upload: '<path d="M12 16V4M12 4l-4 4M12 4l4 4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/>',
+  download: '<path d="M12 4v12M12 16l-4-4M12 16l4-4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/>',
+  trash: '<path d="M4 7h16"/><path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2"/><path d="M6.5 7l1 12.5a2 2 0 002 2h5a2 2 0 002-2L17.5 7"/><path d="M10 11v6M14 11v6"/>',
+  lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',
+  wrench: '<path d="M14.7 6.3a4 4 0 00-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 005.4-5.4l-2.7 2.7-2.8-.8-.8-2.8z"/>',
+  pin: '<path d="M12 21s7-7.6 7-12.2A7 7 0 105 8.8C5 13.4 12 21 12 21z"/><circle cx="12" cy="9" r="2.4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  chat: '<path d="M4 5h16a1 1 0 011 1v10a1 1 0 01-1 1H9l-5 4v-4H4a1 1 0 01-1-1V6a1 1 0 011-1z"/>',
+  warningTriangle: '<path d="M12 3l9.5 17H2.5L12 3z"/><path d="M12 10v4"/><path d="M12 17.2v.01"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3.2 2"/>',
+  checkCircle: '<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.6 2.6L16 9"/>',
+  xCircle: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  trophy: '<path d="M8 4h8v4a4 4 0 01-8 0V4z"/><path d="M8 5H5a3 3 0 003 3M16 5h3a3 3 0 01-3 3"/><path d="M10 14v2.5M14 14v2.5M8 20.5h8M9.2 16.5h5.6l.8 4H8.4l.8-4z"/>',
+  folder: '<path d="M3 7.5a2 2 0 012-2h4l2 2h8a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7z"/>',
+  chevronDown: '<path d="M6 9l6 6 6-6"/>'
+};
+function icon(name, cls='icon'){
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name]||''}</svg>`;
+}
+
+const MOTIVOS = ['Falta de tiempo','Lesión o problema de salud','Problemas personales','Mudanza','Problemas con el servicio','Otro'];
+const RIESGOS = ['','Alto','Medio','Bajo'];
+
+let CASOS = [];
+let AJUSTES = {gerente:'', cargo:'', sede:''};
+let SOCIOS_TOTALES = {};
+let PENDING_ROWS = [];
+
+const todayStr = () => new Date().toISOString().slice(0,10);
+const fmt = (iso) => { if(!iso) return '—'; const [y,m,d]=iso.split('-'); return `${d}/${m}/${y}`; };
+const uid = () => 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const norm = (s) => (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+
+function daysBetween(desde, hasta){
+  if(!desde) return 0;
+  const d1 = new Date(desde+'T00:00:00');
+  const d2 = new Date((hasta||todayStr())+'T00:00:00');
+  return Math.round((d2 - d1) / 86400000);
+}
+
+// ---------- alarma de seguimiento ----------
+// Verde: recién cargado (día 0). Amarillo: dentro de los primeros 5 días, o en
+// cualquier momento en que hubo una interacción (motivo/riesgo/observación cargados).
+// Rojo: pasaron 6 días o más desde la carga sin ninguna interacción.
+// Al cerrar el caso (socio recuperado) se muestra un estado aparte.
+function getAlertInfo(c){
+  if(c.estado === 'Cerrado'){
+    return {color:'recuperado', iconName:'checkCircle', label:'Recuperado', title:'El socio volvió y el caso está cerrado.'};
+  }
+  const tuvoInteraccion = !!(c.motivo || c.riesgo || (c.obs && c.obs.trim()));
+  if(tuvoInteraccion){
+    return {color:'amarillo', iconName:null, label:'En seguimiento', title:'Ya hubo una interacción registrada (motivo, riesgo u observación).'};
+  }
+  const dias = daysBetween(c.fechaCarga);
+  if(dias <= 0) return {color:'verde', iconName:null, label:'Recién cargado', title:'Mensaje enviado hoy, todavía sin vencimiento.'};
+  if(dias <= 5) return {color:'amarillo', iconName:null, label:`Día ${dias}`, title:`Pasaron ${dias} día(s) desde la carga, esperando respuesta.`};
+  return {color:'rojo', iconName:null, label:`Día ${dias}`, title:`Pasaron ${dias} días sin ninguna interacción. Requiere seguimiento urgente.`};
+}
+
+// ---------- storage ----------
+async function loadAjustes(){
+  try{ const r = await window.storage.get('ajustes', false); return r ? JSON.parse(r.value) : {gerente:'', cargo:'', sede:''}; }
+  catch(e){ return {gerente:'', cargo:'', sede:''}; }
+}
+async function saveAjustes(){ try{ await window.storage.set('ajustes', JSON.stringify(AJUSTES), false); }catch(e){} }
+
+async function loadCasos(){
+  try{ const r = await window.storage.get('casos', true); return r ? JSON.parse(r.value) : []; }
+  catch(e){ return []; }
+}
+async function saveCasos(){ try{ await window.storage.set('casos', JSON.stringify(CASOS), true); }catch(e){ console.error(e); } }
+
+async function loadSociosTotales(){
+  try{ const r = await window.storage.get('socios_totales', true); return r ? JSON.parse(r.value) : {}; }
+  catch(e){ return {}; }
+}
+async function saveSociosTotales(){ try{ await window.storage.set('socios_totales', JSON.stringify(SOCIOS_TOTALES), true); }catch(e){ console.error(e); } }
+
+// ---------- message template ----------
+function buildMessage(nombre, gerente, sede, cargo){
+  const first = (nombre||'').trim().split(' ')[0] || nombre || 'Hola';
+  const g = gerente || 'el equipo';
+  const s = sede || 'tu sede';
+  const cRol = (cargo || 'Gerente').toLowerCase();
+  return `Hola ${first},
+
+Espero que estés muy bien.
+
+Soy ${g}, ${cRol} de Megatlon ${s}.
+
+Te escribo porque hace un tiempo que no te vemos entrenando y quería contactarme personalmente para saber cómo estás.
+
+Más allá del gimnasio, entendemos que cada persona atraviesa momentos, cambios de rutina, temas laborales, familiares o de salud que pueden hacer difícil mantener la actividad física. Por eso me gustaría conocer tu situación y ver si hay algo en lo que podamos ayudarte.
+
+Si te parece, contame cuál es el principal motivo por el que dejaste de asistir:
+
+• Falta de tiempo.
+• Lesión o tema de salud.
+• Situaciones personales o familiares.
+• Cambio de domicilio o lugar de trabajo.
+• Algún aspecto de tu experiencia en el gimnasio que no haya cumplido tus expectativas.
+• Otro motivo.
+
+No se trata de una venta ni de una campaña comercial. Simplemente queremos acompañarte mejor.
+
+Te agradezco mucho el tiempo para responder este mensaje.
+
+${g}
+${cargo || 'Gerente'} | Megatlon ${s}`;
+}
+
+function waLink(phone, msg){ return 'https://wa.me/' + phone + '?text=' + encodeURIComponent(msg); }
+
+function contactoPersonal(motivo, riesgo){
+  if(motivo === 'Problemas con el servicio' || riesgo === 'Alto') return 'si';
+  if(!motivo && !riesgo) return 'pend';
+  return 'no';
+}
+
+// ---------- CSV parsing ----------
+function splitCSVLine(line){
+  const result = []; let cur='', inQ=false;
+  for(let i=0;i<line.length;i++){
+    const ch = line[i];
+    if(ch === '"'){ if(inQ && line[i+1] === '"'){ cur+='"'; i++; } else inQ=!inQ; }
+    else if(ch === ',' && !inQ){ result.push(cur); cur=''; }
+    else cur += ch;
+  }
+  result.push(cur);
+  return result.map(s=>s.trim());
+}
+function parseCSV(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim().length);
+  if(!lines.length) return [];
+  const headers = splitCSVLine(lines[0]);
+  return lines.slice(1).map(line=>{
+    const vals = splitCSVLine(line);
+    const obj = {};
+    headers.forEach((h,i)=> obj[h] = vals[i] ?? '');
+    return obj;
+  });
+}
+
+function mapRow(row, defaults){
+  const keys = Object.keys(row);
+  const find = (...names) => {
+    for(const k of keys){ if(names.includes(norm(k))) return (row[k]||'').toString().trim(); }
+    return '';
+  };
+  return {
+    nombre: find('nombre','socio','cliente','nombre y apellido'),
+    email: find('email','correo','mail','e-mail'),
+    telefono: find('telefono','celular','whatsapp','tel','numero','número'),
+    sede: find('sede','sucursal') || defaults.sede,
+    ultimaVisita: find('ultima visita','fecha ultima visita','fecha de ultima visita','ultimo ingreso')
+  };
+}
+
+// ---------- file handling ----------
+document.getElementById('file-input').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  let rows = [];
+  try{
+    if(ext === 'csv'){
+      const text = await file.text();
+      rows = parseCSV(text);
+    } else {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+    }
+  }catch(err){
+    alert('No pude leer el archivo. Revisá que sea un .csv o .xlsx válido.');
+    return;
+  }
+  const defaults = {sede: AJUSTES.sede};
+  PENDING_ROWS = rows.map(r => mapRow(r, defaults)).filter(r => r.nombre);
+  showPreview();
+  e.target.value = '';
+});
+
+function showPreview(){
+  const wrap = document.getElementById('preview-wrap');
+  const table = document.getElementById('preview-table');
+  document.getElementById('preview-count').textContent = PENDING_ROWS.length;
+  if(!PENDING_ROWS.length){
+    alert('No encontré filas válidas (necesitan al menos la columna Nombre).');
+    return;
+  }
+  table.innerHTML = `<thead><tr><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Sede</th><th>Última visita</th></tr></thead>
+    <tbody>${PENDING_ROWS.map(r=>`<tr><td>${r.nombre}</td><td>${r.email||'—'}</td><td>${r.telefono||'—'}</td><td>${r.sede||'—'}</td><td>${r.ultimaVisita||'—'}</td></tr>`).join('')}</tbody>`;
+  wrap.classList.add('show');
+}
+
+document.getElementById('btn-cancel').addEventListener('click', ()=>{
+  PENDING_ROWS = [];
+  document.getElementById('preview-wrap').classList.remove('show');
+});
+
+function crearCaso(r){
+  const gerente = AJUSTES.gerente;
+  const cargo = AJUSTES.cargo;
+  return {
+    id: uid(),
+    nombre: r.nombre,
+    email: r.email,
+    telefono: (r.telefono||'').toString().replace(/[^\d]/g,''),
+    sede: r.sede || AJUSTES.sede || 'Sin sede',
+    ultimaVisita: r.ultimaVisita,
+    mensaje: buildMessage(r.nombre, gerente, r.sede || AJUSTES.sede, cargo),
+    subidoPor: gerente,
+    cargoSubidoPor: cargo,
+    fechaCarga: todayStr(),
+    motivo: '', riesgo: '', fechaMotivoRiesgo: '',
+    fechaSeguimiento: '', estado: 'Abierto', obs: ''
+  };
+}
+
+document.getElementById('btn-confirm').addEventListener('click', async ()=>{
+  PENDING_ROWS.forEach(r=> CASOS.push(crearCaso(r)));
+  await saveCasos();
+  PENDING_ROWS = [];
+  document.getElementById('preview-wrap').classList.remove('show');
+  renderAll();
+});
+
+document.getElementById('btn-add-manual').addEventListener('click', async ()=>{
+  const nombre = document.getElementById('manual-nombre').value.trim();
+  if(!nombre){
+    alert('El nombre es obligatorio para agregar un socio.');
+    return;
+  }
+  const r = {
+    nombre,
+    email: document.getElementById('manual-email').value.trim(),
+    telefono: document.getElementById('manual-telefono').value.trim(),
+    sede: document.getElementById('manual-sede').value.trim(),
+    ultimaVisita: document.getElementById('manual-visita').value.trim()
+  };
+  CASOS.push(crearCaso(r));
+  await saveCasos();
+  ['manual-nombre','manual-email','manual-telefono','manual-sede','manual-visita'].forEach(id=>{
+    document.getElementById(id).value = '';
+  });
+  renderAll();
+});
+
+// ---------- template / export ----------
+document.getElementById('btn-template').addEventListener('click', ()=>{
+  const csv = 'Nombre,Email,Telefono,Sede,Ultima Visita\nJuan Pérez,juan.perez@mail.com,5491122334455,Núñez,15/03/2026\n';
+  downloadBlob(csv, 'plantilla_socios_megatlon.csv', 'text/csv');
+});
+document.getElementById('btn-export').addEventListener('click', ()=>{
+  const headers = ['Nombre','Email','Telefono','Sede','Motivo','Riesgo','Fecha carga','Fecha motivo/riesgo','Proximo seguimiento','Estado','Observaciones'];
+  const rows = CASOS.map(c => [c.nombre,c.email,c.telefono,c.sede,c.motivo,c.riesgo,c.fechaCarga,c.fechaMotivoRiesgo,c.fechaSeguimiento,c.estado,c.obs]
+    .map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
+  const csv = headers.join(',') + '\n' + rows.join('\n');
+  downloadBlob(csv, `seguimiento_sleepers_${todayStr()}.csv`, 'text/csv');
+});
+function downloadBlob(content, filename, type){
+  const blob = new Blob([content], {type});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- back office toggle ----------
+document.getElementById('bo-toggle').addEventListener('click', ()=>{
+  document.getElementById('bo-body').classList.toggle('open');
+  document.getElementById('bo-toggle').classList.toggle('open');
+});
+
+// ---------- settings inputs ----------
+document.getElementById('input-gerente').addEventListener('change', async (e)=>{ AJUSTES.gerente = e.target.value; await saveAjustes(); });
+document.getElementById('input-cargo').addEventListener('change', async (e)=>{ AJUSTES.cargo = e.target.value; await saveAjustes(); });
+document.getElementById('input-sede').addEventListener('change', async (e)=>{ AJUSTES.sede = e.target.value; await saveAjustes(); });
+
+// ---------- modal ----------
+function openModal(name, msg){
+  document.getElementById('modal-name').textContent = name;
+  document.getElementById('modal-text').textContent = msg;
+  document.getElementById('modal-bg').classList.add('open');
+}
+function closeModal(){ document.getElementById('modal-bg').classList.remove('open'); }
+document.getElementById('modal-bg').addEventListener('click', e=>{ if(e.target.id==='modal-bg') closeModal(); });
+
+// ---------- filters ----------
+document.getElementById('filter-sede').addEventListener('change', renderAll);
+document.getElementById('filter-estado').addEventListener('change', renderAll);
+document.getElementById('filter-search').addEventListener('input', renderAll);
+
+['sede-filter-desde','sede-filter-hasta','sede-filter-motivo','sede-filter-riesgo'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', renderSedeComparativa);
+});
+document.getElementById('sede-filter-clear').addEventListener('click', ()=>{
+  document.getElementById('sede-filter-desde').value = '';
+  document.getElementById('sede-filter-hasta').value = '';
+  document.getElementById('sede-filter-motivo').value = '';
+  document.getElementById('sede-filter-riesgo').value = '';
+  renderSedeComparativa();
+});
+
+function getFiltered(){
+  const sede = document.getElementById('filter-sede').value;
+  const estado = document.getElementById('filter-estado').value;
+  const search = norm(document.getElementById('filter-search').value);
+  return CASOS.filter(c=>{
+    if(sede && c.sede !== sede) return false;
+    if(estado && c.estado !== estado) return false;
+    if(search && !(norm(c.nombre).includes(search) || norm(c.email).includes(search))) return false;
+    return true;
+  });
+}
+
+// Igual que getFiltered pero ignora el filtro de Estado: las estadísticas
+// siempre deben contemplar el total de clientes cargados, recuperados o dados de baja.
+function getStatsSet(){
+  const sede = document.getElementById('filter-sede').value;
+  const search = norm(document.getElementById('filter-search').value);
+  return CASOS.filter(c=>{
+    if(sede && c.sede !== sede) return false;
+    if(search && !(norm(c.nombre).includes(search) || norm(c.email).includes(search))) return false;
+    return true;
+  });
+}
+
+function emailCounts(){
+  const counts = {};
+  CASOS.forEach(c => { const k = norm(c.email) || norm(c.nombre); counts[k] = (counts[k]||0)+1; });
+  return counts;
+}
+
+// ---------- comparativa entre sedes ----------
+function getSedeCompareBase(){
+  const desde = document.getElementById('sede-filter-desde').value;
+  const hasta = document.getElementById('sede-filter-hasta').value;
+  const motivo = document.getElementById('sede-filter-motivo').value;
+  const riesgo = document.getElementById('sede-filter-riesgo').value;
+  return CASOS.filter(c=>{
+    if(desde && (!c.fechaCarga || c.fechaCarga < desde)) return false;
+    if(hasta && (!c.fechaCarga || c.fechaCarga > hasta)) return false;
+    if(motivo && c.motivo !== motivo) return false;
+    if(riesgo && c.riesgo !== riesgo) return false;
+    return true;
+  });
+}
+
+function computeSedeStats(){
+  const base = getSedeCompareBase();
+  const counts = emailCounts();
+  const sedes = [...new Set(base.map(c=>c.sede).filter(Boolean))].sort();
+  return sedes.map(sede=>{
+    const list = base.filter(c=>c.sede===sede);
+    const total = list.length;
+    const respondieron = list.filter(c=>c.motivo).length;
+    const riesgoAlto = list.filter(c=>c.riesgo==='Alto').length;
+    const cerrados = list.filter(c=>c.estado==='Cerrado').length;
+    const abiertos = total - cerrados;
+    const reincidentes = list.filter(c=>counts[norm(c.email)||norm(c.nombre)] > 1).length;
+    const motivoTally = {};
+    list.forEach(c=>{ if(c.motivo) motivoTally[c.motivo] = (motivoTally[c.motivo]||0)+1; });
+    let motivoTop = '—', max = 0;
+    Object.entries(motivoTally).forEach(([m,n])=>{ if(n>max){ max=n; motivoTop=m; } });
+    const totalSocios = SOCIOS_TOTALES[sede] || null;
+    return {
+      sede, total, respondieron,
+      tasaResp: total ? Math.round(respondieron/total*100) : 0,
+      riesgoAlto, reincidentes, abiertos, cerrados,
+      tasaRecup: total ? Math.round(cerrados/total*100) : 0,
+      motivoTop, totalSocios,
+      pctCartera: totalSocios ? Math.round(total/totalSocios*1000)/10 : null
+    };
+  });
+}
+
+function renderSedeComparativa(){
+  const stats = computeSedeStats();
+  const tbody = document.getElementById('sede-tbody');
+  const empty = document.getElementById('sede-empty-state');
+  tbody.innerHTML = '';
+
+  if(!stats.length){
+    empty.style.display = 'block';
+    document.getElementById('sede-cargados-bars').innerHTML = '';
+    document.getElementById('sede-recup-bars').innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const mejorRecup = Math.max(...stats.map(s=>s.tasaRecup));
+  const peorRiesgo = Math.max(...stats.map(s=>s.riesgoAlto));
+
+  stats.sort((a,b)=>b.tasaRecup-a.tasaRecup).forEach(s=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><div class="client-name">${s.sede}</div>${s.tasaRecup===mejorRecup && mejorRecup>0 ? `<span class="badge dup" style="background:rgba(61,214,140,.15); color:var(--ok);">${icon('trophy','icon')} Mejor recuperación</span>` : ''}</td>
+      <td>${s.total}</td>
+      <td><input type="text" inputmode="numeric" class="socios-totales-input" data-sede="${s.sede}" value="${s.totalSocios ?? ''}" placeholder="Cargar total" style="max-width:100px;"></td>
+      <td>${s.pctCartera!==null ? s.pctCartera+'%' : '—'}</td>
+      <td>${s.respondieron}</td>
+      <td>${s.tasaResp}%</td>
+      <td>${s.riesgoAlto>0 && s.riesgoAlto===peorRiesgo ? `<span class="contact-chip si">${s.riesgoAlto}</span>` : s.riesgoAlto}</td>
+      <td>${s.reincidentes}</td>
+      <td>${s.abiertos}</td>
+      <td>${s.cerrados}</td>
+      <td>${s.tasaRecup}%</td>
+      <td class="client-sub">${s.motivoTop}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('.socios-totales-input').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const val = parseInt(inp.value.replace(/\D/g,''), 10);
+      if(val > 0) SOCIOS_TOTALES[inp.dataset.sede] = val;
+      else delete SOCIOS_TOTALES[inp.dataset.sede];
+      await saveSociosTotales();
+      renderSedeComparativa();
+    });
+  });
+
+  const maxTotal = Math.max(1, ...stats.map(s=>s.total));
+  document.getElementById('sede-cargados-bars').innerHTML = stats.map(s=>`
+    <div class="bar-row"><div class="lbl">${s.sede}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(s.total/maxTotal*100)}%"></div></div>
+      <div class="val">${s.total}</div></div>`).join('');
+
+  document.getElementById('sede-recup-bars').innerHTML = stats.map(s=>`
+    <div class="bar-row"><div class="lbl">${s.sede}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${s.tasaRecup}%; background:var(--ok);"></div></div>
+      <div class="val">${s.tasaRecup}%</div></div>`).join('');
+}
+
+// ---------- render ----------
+function populateSedeFilter(){
+  const sel = document.getElementById('filter-sede');
+  const current = sel.value;
+  const sedes = [...new Set(CASOS.map(c=>c.sede).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Todas</option>' + sedes.map(s=>`<option value="${s}">${s}</option>`).join('');
+  if(sedes.includes(current)) sel.value = current;
+
+  const motivoSel = document.getElementById('sede-filter-motivo');
+  if(motivoSel.options.length <= 1){
+    motivoSel.innerHTML = '<option value="">Todos</option>' + MOTIVOS.map(m=>`<option value="${m}">${m}</option>`).join('');
+  }
+}
+
+function renderAll(){
+  populateSedeFilter();
+  renderSedeComparativa();
+  const filtered = getFiltered();
+  const counts = emailCounts();
+  const tbody = document.getElementById('tbody');
+  const emptyState = document.getElementById('empty-state');
+  tbody.innerHTML = '';
+
+  if(!filtered.length){
+    emptyState.style.display = 'block';
+    emptyState.textContent = CASOS.length ? 'No hay socios que coincidan con el filtro actual.' : 'Todavía no cargaste ningún socio. Usá el back office de arriba para subir tu primera planilla.';
+  } else {
+    emptyState.style.display = 'none';
+  }
+
+  filtered.forEach(c => {
+    const key = norm(c.email) || norm(c.nombre);
+    const isDup = counts[key] > 1;
+    const hasPhone = c.telefono && c.telefono.length > 5;
+    const tr = document.createElement('tr');
+    tr.className = (isDup ? 'dup ' : '') + (c.estado === 'Cerrado' ? 'cerrada' : '');
+
+    const waBtn = hasPhone
+      ? `<a class="wa-btn" target="_blank" href="${waLink(c.telefono, c.mensaje)}">${icon('chat')} WhatsApp</a>`
+      : `<span class="wa-btn disabled">Sin teléfono</span>`;
+
+    const seguimientoVencido = c.fechaSeguimiento && c.fechaSeguimiento <= todayStr() && c.estado === 'Abierto';
+    const alarma = getAlertInfo(c);
+
+    tr.innerHTML = `
+      <td><span class="alarma-dot ${alarma.color}" title="${alarma.title}">${alarma.iconName ? icon(alarma.iconName) : `<span class="dot ${alarma.color}"></span>`} ${alarma.label}</span></td>
+      <td>
+        <div class="client-name">${c.nombre}</div>
+        <span class="badge sede">${c.sede||'—'}</span>
+        ${isDup ? `<span class="badge dup">${icon('warningTriangle')} Reincidente (${counts[key]})</span>` : ''}
+        ${c.subidoPor ? `<div class="client-sub">Cargado por: ${c.subidoPor}${c.cargoSubidoPor ? ' · '+c.cargoSubidoPor : ''}</div>` : ''}
+      </td>
+      <td>${waBtn}<div class="client-sub">${c.email||'—'}</div></td>
+      <td><button class="msg-btn" data-id="${c.id}">Ver mensaje</button></td>
+      <td>
+        <select class="motivo-select" data-id="${c.id}">
+          <option value="">—</option>
+          ${MOTIVOS.map(m => `<option value="${m}" ${c.motivo===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <select class="risk-select ${c.riesgo?c.riesgo.toLowerCase():''}" data-id="${c.id}">
+          ${RIESGOS.map(r => `<option value="${r}" ${c.riesgo===r?'selected':''}>${r||'—'}</option>`).join('')}
+        </select>
+      </td>
+      <td class="client-sub">${fmt(c.fechaCarga)}</td>
+      <td>
+        <input type="date" class="seg-input" data-id="${c.id}" value="${c.fechaSeguimiento||''}">
+        ${seguimientoVencido ? `<div class="seg-warn">${icon('clock')} Vencido</div>` : ''}
+      </td>
+      <td>
+        <select class="estado-select ${c.estado==='Cerrado'?'cerrado':'abierto'}" data-id="${c.id}">
+          <option value="Abierto" ${c.estado!=='Cerrado'?'selected':''}>Abierto</option>
+          <option value="Cerrado" ${c.estado==='Cerrado'?'selected':''}>Cerrado</option>
+        </select>
+      </td>
+      <td><input type="text" class="obs-input" data-id="${c.id}" placeholder="Notas..." value="${(c.obs||'').replace(/"/g,'&quot;')}"></td>
+      <td><button class="del-btn" data-id="${c.id}" title="Eliminar">${icon('trash')}</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('.msg-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const c = CASOS.find(x=>x.id===btn.dataset.id);
+      openModal(c.nombre, c.mensaje);
+    });
+  });
+  tbody.querySelectorAll('.motivo-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const c = CASOS.find(x=>x.id===sel.dataset.id);
+      c.motivo = sel.value;
+      c.fechaMotivoRiesgo = todayStr();
+      await saveCasos();
+      renderAll();
+    });
+  });
+  tbody.querySelectorAll('.risk-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const c = CASOS.find(x=>x.id===sel.dataset.id);
+      c.riesgo = sel.value;
+      c.fechaMotivoRiesgo = todayStr();
+      await saveCasos();
+      renderAll();
+    });
+  });
+  tbody.querySelectorAll('.seg-input').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const c = CASOS.find(x=>x.id===inp.dataset.id);
+      c.fechaSeguimiento = inp.value;
+      await saveCasos();
+      renderAll();
+    });
+  });
+  tbody.querySelectorAll('.obs-input').forEach(inp=>{
+    inp.addEventListener('change', async ()=>{
+      const c = CASOS.find(x=>x.id===inp.dataset.id);
+      c.obs = inp.value;
+      await saveCasos();
+    });
+  });
+  tbody.querySelectorAll('.estado-select').forEach(sel=>{
+    sel.addEventListener('change', async ()=>{
+      const c = CASOS.find(x=>x.id===sel.dataset.id);
+      c.estado = sel.value;
+      await saveCasos();
+      renderAll();
+    });
+  });
+  tbody.querySelectorAll('.del-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(!confirm('¿Eliminar este socio de la planilla?')) return;
+      CASOS = CASOS.filter(x=>x.id!==btn.dataset.id);
+      await saveCasos();
+      renderAll();
+    });
+  });
+
+  renderStats(getStatsSet());
+}
+
+function renderStats(filtered){
+  const total = filtered.length;
+  const withMotivo = filtered.filter(c=>c.motivo).length;
+  const altoRiesgo = filtered.filter(c=>c.riesgo==='Alto').length;
+  const contactoCount = filtered.filter(c=>contactoPersonal(c.motivo,c.riesgo)==='si').length;
+  const recuperados = filtered.filter(c=>c.estado==='Cerrado').length;
+  const sinRespuesta = filtered.filter(c=>getAlertInfo(c).color==='rojo').length;
+  const counts = emailCounts();
+  const dupCount = filtered.filter(c=>counts[norm(c.email)||norm(c.nombre)] > 1).length;
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat accent"><div class="n">${total}</div><div class="l">Total de socios</div></div>
+    <div class="stat"><div class="n">${withMotivo}</div><div class="l">Respondieron motivo</div></div>
+    <div class="stat warn"><div class="n">${altoRiesgo}</div><div class="l">Riesgo alto</div></div>
+    <div class="stat danger"><div class="n">${contactoCount}</div><div class="l">Requieren contacto personal</div></div>
+    <div class="stat ${sinRespuesta>0?'danger':''}"><div class="n">${sinRespuesta}</div><div class="l"><span class="dot rojo" style="margin-right:5px;"></span>Sin respuesta (+5 días)</div></div>
+    <div class="stat ok"><div class="n">${recuperados}</div><div class="l">Recuperados</div></div>
+    <div class="stat ${dupCount>0?'danger':''}"><div class="n">${dupCount}</div><div class="l">Reincidentes</div></div>
+  `;
+
+  const motivoCounts = {}; MOTIVOS.forEach(m=>motivoCounts[m]=0);
+  filtered.forEach(c=>{ if(c.motivo) motivoCounts[c.motivo]++; });
+  const maxM = Math.max(1, ...Object.values(motivoCounts));
+  document.getElementById('motivo-bars').innerHTML = MOTIVOS.map(m=>`
+    <div class="bar-row"><div class="lbl">${m}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(motivoCounts[m]/maxM*100)}%"></div></div>
+      <div class="val">${motivoCounts[m]}</div></div>`).join('');
+
+  const riesgoCounts = {Alto:0,Medio:0,Bajo:0};
+  filtered.forEach(c=>{ if(c.riesgo && riesgoCounts[c.riesgo]!==undefined) riesgoCounts[c.riesgo]++; });
+  const maxR = Math.max(1, ...Object.values(riesgoCounts));
+  document.getElementById('riesgo-bars').innerHTML = Object.keys(riesgoCounts).map(r=>`
+    <div class="bar-row"><div class="lbl">${r}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(riesgoCounts[r]/maxR*100)}%; background:${r==='Alto'?'var(--danger)':r==='Medio'?'var(--warn)':'var(--ok)'}"></div></div>
+      <div class="val">${riesgoCounts[r]}</div></div>`).join('');
+}
+
+// ---------- panel de administración ----------
+// Nota de seguridad: este código de acceso es solo un filtro de conveniencia para
+// no mostrar la administración por defecto. Al ser una página estática, cualquier
+// persona con conocimientos técnicos podría ver este código en el código fuente.
+// No reemplaza un sistema de login real con permisos por usuario.
+const ADMIN_CODE = 'MEGATLON2026';
+
+document.getElementById('btn-admin-open').addEventListener('click', ()=>{
+  const panel = document.getElementById('admin-panel');
+  if(panel.style.display === 'block'){ panel.style.display = 'none'; return; }
+  const code = prompt('Ingresá el código de administración:');
+  if(code === null) return;
+  if(code.trim().toUpperCase() !== ADMIN_CODE){
+    alert('Código incorrecto.');
+    return;
+  }
+  panel.style.display = 'block';
+  renderAdminPanel();
+  panel.scrollIntoView({behavior:'smooth'});
+});
+document.getElementById('btn-admin-close').addEventListener('click', ()=>{
+  document.getElementById('admin-panel').style.display = 'none';
+});
+
+function renderAdminPanel(){
+  const tbody = document.getElementById('admin-tbody');
+  tbody.innerHTML = CASOS.map(c => `
+    <tr>
+      <td><input type="checkbox" class="admin-check" data-id="${c.id}"></td>
+      <td>${c.nombre}</td>
+      <td class="client-sub">${c.email||'—'}</td>
+      <td><span class="badge sede">${c.sede||'—'}</span></td>
+      <td class="client-sub">${c.subidoPor||'—'}${c.cargoSubidoPor?' · '+c.cargoSubidoPor:''}</td>
+      <td class="client-sub">${fmt(c.fechaCarga)}</td>
+      <td class="client-sub">${c.motivo||'—'}</td>
+      <td class="client-sub">${c.riesgo||'—'}</td>
+      <td class="client-sub">${c.estado}</td>
+    </tr>
+  `).join('');
+  document.getElementById('admin-select-all').checked = false;
+}
+
+document.getElementById('admin-select-all').addEventListener('change', (e)=>{
+  document.querySelectorAll('.admin-check').forEach(chk => chk.checked = e.target.checked);
+});
+
+function getAdminSelectedIds(){
+  return [...document.querySelectorAll('.admin-check:checked')].map(chk => chk.dataset.id);
+}
+
+document.getElementById('btn-admin-delete').addEventListener('click', async ()=>{
+  const ids = getAdminSelectedIds();
+  if(!ids.length){ alert('Seleccioná al menos un socio.'); return; }
+  if(!confirm(`¿Eliminar ${ids.length} socio(s) de la base? Esta acción no se puede deshacer.`)) return;
+  CASOS = CASOS.filter(c => !ids.includes(c.id));
+  await saveCasos();
+  renderAdminPanel();
+  renderAll();
+});
+
+document.getElementById('btn-admin-reasignar').addEventListener('click', async ()=>{
+  const ids = getAdminSelectedIds();
+  const nuevaSede = document.getElementById('admin-reasignar-sede').value.trim();
+  if(!ids.length){ alert('Seleccioná al menos un socio.'); return; }
+  if(!nuevaSede){ alert('Escribí la sede de destino.'); return; }
+  CASOS.forEach(c => { if(ids.includes(c.id)) c.sede = nuevaSede; });
+  await saveCasos();
+  document.getElementById('admin-reasignar-sede').value = '';
+  renderAdminPanel();
+  renderAll();
+});
+
+document.getElementById('btn-admin-export').addEventListener('click', ()=>{
+  document.getElementById('btn-export').click();
+});
+
+// ---------- init ----------
+async function init(){
+  document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  AJUSTES = await loadAjustes();
+  document.getElementById('input-gerente').value = AJUSTES.gerente || '';
+  document.getElementById('input-cargo').value = AJUSTES.cargo || '';
+  document.getElementById('input-sede').value = AJUSTES.sede || '';
+  CASOS = await loadCasos();
+  SOCIOS_TOTALES = await loadSociosTotales();
+  if(!CASOS.length){
+    document.getElementById('bo-body').classList.add('open');
+    document.getElementById('bo-toggle').classList.add('open');
+  }
+  renderAll();
+}
+init();
+</script>
+</body>
+</html>
