@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Back Office · Seguimiento Sleepers Megatlon</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg:#0F1115; --panel:#171A20; --panel-2:#1E222A; --line:#2A2F3A;
@@ -21,7 +23,7 @@
   .dot.amarillo{background:var(--warn);}
   .dot.rojo{background:var(--danger);}
   .dot.recuperado{background:var(--ok);}
-  .wrap{max-width:1500px; margin:0 auto; padding:28px 24px 90px;}
+  .wrap{max-width:1900px; margin:0 auto; padding:28px 24px 90px;}
 
   header.top{
     display:flex; align-items:flex-end; justify-content:space-between;
@@ -94,10 +96,11 @@
   .bar-row .val{width:26px; text-align:right; font-weight:700; font-size:12.5px;}
 
   /* ---- Table ---- */
-  table.main{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.main{width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;}
+  table.main select, table.main input[type=text], table.main input[type=date]{min-width:0; font-size:11.5px; padding:5px 6px;}
   .table-wrap{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow-x:auto;}
-  thead th{text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600; padding:11px 12px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;}
-  tbody td{padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:nowrap;}
+  thead th{text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:600; padding:9px 8px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:normal; line-height:1.3;}
+  tbody td{padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:middle; white-space:normal; overflow-wrap:break-word;}
   tbody tr:last-child td{border-bottom:none;}
   tbody tr.dup{background:rgba(255,93,93,0.06);}
   tbody tr.cerrada{opacity:.55;}
@@ -136,6 +139,9 @@
   .alarma-dot.rojo{background:rgba(255,93,93,.15); color:var(--danger);}
   .alarma-dot.recuperado{background:rgba(61,214,140,.12); color:var(--ok);}
   .del-btn{background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px;}
+  .obs-save-btn{background:none; border:1px solid var(--line); color:var(--muted); cursor:pointer; border-radius:6px; padding:6px 7px; flex-shrink:0; display:flex; align-items:center; justify-content:center;}
+  .obs-save-btn:hover{border-color:var(--accent); color:var(--accent);}
+  .obs-save-btn.saved{border-color:var(--ok); color:var(--ok);}
   .del-btn:hover{color:var(--danger);}
 
   .empty-state{padding:50px 20px; text-align:center; color:var(--muted); font-size:13px;}
@@ -190,6 +196,7 @@
             <th>Sede</th>
             <th>Cargado por</th>
             <th>Fecha carga</th>
+            <th>Fecha envío mensaje</th>
             <th>Motivo</th>
             <th>Riesgo</th>
             <th>Estado</th>
@@ -366,6 +373,12 @@
   <p class="section-title">Listado de socios</p>
   <div class="table-wrap">
     <table class="main">
+      <colgroup>
+        <col style="width:9%"><col style="width:13%"><col style="width:12%">
+        <col style="width:7%"><col style="width:12%"><col style="width:8%">
+        <col style="width:7%"><col style="width:10%"><col style="width:8%">
+        <col style="width:12%"><col style="width:2%">
+      </colgroup>
       <thead>
         <tr>
           <th>Alarma</th>
@@ -461,24 +474,84 @@ function getAlertInfo(c){
   return {color:'rojo', iconName:null, label:`Día ${dias}`, title:`Pasaron ${dias} días sin ninguna interacción. Requiere seguimiento urgente.`};
 }
 
-// ---------- storage ----------
-async function loadAjustes(){
-  try{ const r = await window.storage.get('ajustes', false); return r ? JSON.parse(r.value) : {gerente:'', cargo:'', sede:''}; }
+// ---------- storage: Firebase Firestore (datos compartidos entre todas las sedes) ----------
+const firebaseConfig = {
+  apiKey: "AIzaSyCFRhQj8uGXIvSBvB8J_q2OIDCSGj7dSjw",
+  authDomain: "sleeper-mega.firebaseapp.com",
+  projectId: "sleeper-mega",
+  storageBucket: "sleeper-mega.firebasestorage.app",
+  messagingSenderId: "166914196605",
+  appId: "1:166914196605:web:102247fb45f53d28bedd14"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const casosCol = db.collection('casos');
+const metaDoc = db.collection('meta').doc('socios_totales');
+
+// Ajustes (tu nombre / cargo / sede) son personales de este navegador: se guardan
+// en localStorage, no en Firestore, porque no tiene sentido compartirlos entre gerentes.
+function loadAjustes(){
+  try{ const raw = localStorage.getItem('sleepers_ajustes'); return raw ? JSON.parse(raw) : {gerente:'', cargo:'', sede:''}; }
   catch(e){ return {gerente:'', cargo:'', sede:''}; }
 }
-async function saveAjustes(){ try{ await window.storage.set('ajustes', JSON.stringify(AJUSTES), false); }catch(e){} }
+function saveAjustes(){ try{ localStorage.setItem('sleepers_ajustes', JSON.stringify(AJUSTES)); }catch(e){} }
 
-async function loadCasos(){
-  try{ const r = await window.storage.get('casos', true); return r ? JSON.parse(r.value) : []; }
-  catch(e){ return []; }
+// Casos: un documento por socio en Firestore, sincronizado en tiempo real.
+// Cualquier gerente que cargue o edite algo lo ven todos los demás sin recargar la página.
+function iniciarSincronizacionCasos(onReady){
+  let primeraCarga = true;
+  casosCol.onSnapshot(snapshot => {
+    CASOS = snapshot.docs.map(doc => doc.data());
+    if(primeraCarga){ primeraCarga = false; onReady(); }
+    else{ renderAll(); }
+  }, err => {
+    console.error('Error de sincronización con Firestore:', err);
+    alert('No se pudo conectar con la base de datos (Firestore). Revisá tu conexión o las reglas de seguridad del proyecto.');
+  });
 }
-async function saveCasos(){ try{ await window.storage.set('casos', JSON.stringify(CASOS), true); }catch(e){ console.error(e); } }
+
+async function guardarCaso(caso){
+  try{ await casosCol.doc(caso.id).set(caso); }
+  catch(e){ console.error(e); alert('No se pudo guardar el cambio. Revisá tu conexión.'); }
+}
+async function guardarCasosEnLote(listaCasos){
+  try{
+    const batch = db.batch();
+    listaCasos.forEach(c => batch.set(casosCol.doc(c.id), c));
+    await batch.commit();
+  }catch(e){ console.error(e); alert('No se pudo guardar la carga. Revisá tu conexión.'); }
+}
+async function actualizarCaso(id, campos){
+  try{ await casosCol.doc(id).update(campos); }
+  catch(e){ console.error(e); alert('No se pudo guardar el cambio. Revisá tu conexión.'); }
+}
+async function eliminarCaso(id){
+  try{ await casosCol.doc(id).delete(); }
+  catch(e){ console.error(e); alert('No se pudo eliminar. Revisá tu conexión.'); }
+}
+async function eliminarCasosEnLote(ids){
+  try{
+    const batch = db.batch();
+    ids.forEach(id => batch.delete(casosCol.doc(id)));
+    await batch.commit();
+  }catch(e){ console.error(e); alert('No se pudo eliminar. Revisá tu conexión.'); }
+}
+async function reasignarSedeEnLote(ids, nuevaSede){
+  try{
+    const batch = db.batch();
+    ids.forEach(id => batch.update(casosCol.doc(id), {sede: nuevaSede}));
+    await batch.commit();
+  }catch(e){ console.error(e); alert('No se pudo reasignar. Revisá tu conexión.'); }
+}
 
 async function loadSociosTotales(){
-  try{ const r = await window.storage.get('socios_totales', true); return r ? JSON.parse(r.value) : {}; }
-  catch(e){ return {}; }
+  try{ const snap = await metaDoc.get(); return snap.exists ? snap.data() : {}; }
+  catch(e){ console.error(e); return {}; }
 }
-async function saveSociosTotales(){ try{ await window.storage.set('socios_totales', JSON.stringify(SOCIOS_TOTALES), true); }catch(e){ console.error(e); } }
+async function saveSociosTotales(){
+  try{ await metaDoc.set(SOCIOS_TOTALES); }
+  catch(e){ console.error(e); alert('No se pudo guardar. Revisá tu conexión.'); }
+}
 
 // ---------- message template ----------
 function buildMessage(nombre, gerente, sede, cargo){
@@ -618,17 +691,18 @@ function crearCaso(r){
     subidoPor: gerente,
     cargoSubidoPor: cargo,
     fechaCarga: todayStr(),
+    fechaEnvioMensaje: '',
     motivo: '', riesgo: '', fechaMotivoRiesgo: '',
     fechaSeguimiento: '', estado: 'Abierto', obs: ''
   };
 }
 
 document.getElementById('btn-confirm').addEventListener('click', async ()=>{
-  PENDING_ROWS.forEach(r=> CASOS.push(crearCaso(r)));
-  await saveCasos();
+  const nuevos = PENDING_ROWS.map(r => crearCaso(r));
+  await guardarCasosEnLote(nuevos);
   PENDING_ROWS = [];
   document.getElementById('preview-wrap').classList.remove('show');
-  renderAll();
+  // renderAll() lo dispara automáticamente el listener en tiempo real de Firestore.
 });
 
 document.getElementById('btn-add-manual').addEventListener('click', async ()=>{
@@ -644,12 +718,10 @@ document.getElementById('btn-add-manual').addEventListener('click', async ()=>{
     sede: document.getElementById('manual-sede').value.trim(),
     ultimaVisita: document.getElementById('manual-visita').value.trim()
   };
-  CASOS.push(crearCaso(r));
-  await saveCasos();
+  await guardarCaso(crearCaso(r));
   ['manual-nombre','manual-email','manual-telefono','manual-sede','manual-visita'].forEach(id=>{
     document.getElementById(id).value = '';
   });
-  renderAll();
 });
 
 // ---------- template / export ----------
@@ -658,8 +730,8 @@ document.getElementById('btn-template').addEventListener('click', ()=>{
   downloadBlob(csv, 'plantilla_socios_megatlon.csv', 'text/csv');
 });
 document.getElementById('btn-export').addEventListener('click', ()=>{
-  const headers = ['Nombre','Email','Telefono','Sede','Motivo','Riesgo','Fecha carga','Fecha motivo/riesgo','Proximo seguimiento','Estado','Observaciones'];
-  const rows = CASOS.map(c => [c.nombre,c.email,c.telefono,c.sede,c.motivo,c.riesgo,c.fechaCarga,c.fechaMotivoRiesgo,c.fechaSeguimiento,c.estado,c.obs]
+  const headers = ['Nombre','Email','Telefono','Sede','Fecha carga','Fecha envio mensaje','Motivo','Riesgo','Fecha motivo/riesgo','Proximo seguimiento','Estado','Observaciones'];
+  const rows = CASOS.map(c => [c.nombre,c.email,c.telefono,c.sede,c.fechaCarga,c.fechaEnvioMensaje,c.motivo,c.riesgo,c.fechaMotivoRiesgo,c.fechaSeguimiento,c.estado,c.obs]
     .map(v => `"${(v||'').toString().replace(/"/g,'""')}"`).join(','));
   const csv = headers.join(',') + '\n' + rows.join('\n');
   downloadBlob(csv, `seguimiento_sleepers_${todayStr()}.csv`, 'text/csv');
@@ -856,6 +928,7 @@ function populateSedeFilter(){
 function renderAll(){
   populateSedeFilter();
   renderSedeComparativa();
+  if(document.getElementById('admin-panel').style.display === 'block') renderAdminPanel();
   const filtered = getFiltered();
   const counts = emailCounts();
   const tbody = document.getElementById('tbody');
@@ -877,8 +950,11 @@ function renderAll(){
     tr.className = (isDup ? 'dup ' : '') + (c.estado === 'Cerrado' ? 'cerrada' : '');
 
     const waBtn = hasPhone
-      ? `<a class="wa-btn" target="_blank" href="${waLink(c.telefono, c.mensaje)}">${icon('chat')} WhatsApp</a>`
+      ? `<a class="wa-btn" target="_blank" data-id="${c.id}" href="${waLink(c.telefono, c.mensaje)}">${icon('chat')} WhatsApp</a>`
       : `<span class="wa-btn disabled">Sin teléfono</span>`;
+    const envioInfo = c.fechaEnvioMensaje
+      ? `<div class="client-sub">Enviado: ${fmt(c.fechaEnvioMensaje)}</div>`
+      : `<div class="client-sub" style="color:var(--muted);">Sin enviar</div>`;
 
     const seguimientoVencido = c.fechaSeguimiento && c.fechaSeguimiento <= todayStr() && c.estado === 'Abierto';
     const alarma = getAlertInfo(c);
@@ -891,7 +967,7 @@ function renderAll(){
         ${isDup ? `<span class="badge dup">${icon('warningTriangle')} Reincidente (${counts[key]})</span>` : ''}
         ${c.subidoPor ? `<div class="client-sub">Cargado por: ${c.subidoPor}${c.cargoSubidoPor ? ' · '+c.cargoSubidoPor : ''}</div>` : ''}
       </td>
-      <td>${waBtn}<div class="client-sub">${c.email||'—'}</div></td>
+      <td>${waBtn}${envioInfo}<div class="client-sub">${c.email||'—'}</div></td>
       <td><button class="msg-btn" data-id="${c.id}">Ver mensaje</button></td>
       <td>
         <select class="motivo-select" data-id="${c.id}">
@@ -915,7 +991,12 @@ function renderAll(){
           <option value="Cerrado" ${c.estado==='Cerrado'?'selected':''}>Cerrado</option>
         </select>
       </td>
-      <td><input type="text" class="obs-input" data-id="${c.id}" placeholder="Notas..." value="${(c.obs||'').replace(/"/g,'&quot;')}"></td>
+      <td>
+        <div style="display:flex; gap:6px; align-items:center; min-width:0;">
+          <input type="text" class="obs-input" data-id="${c.id}" placeholder="Notas..." value="${(c.obs||'').replace(/"/g,'&quot;')}" style="flex:1; min-width:0;">
+          <button class="obs-save-btn" data-id="${c.id}" title="Guardar observación"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M8 21v-7h8v7M8 3v5h6"/></svg></button>
+        </div>
+      </td>
       <td><button class="del-btn" data-id="${c.id}" title="Eliminar">${icon('trash')}</button></td>
     `;
     tbody.appendChild(tr);
@@ -927,53 +1008,60 @@ function renderAll(){
       openModal(c.nombre, c.mensaje);
     });
   });
+  tbody.querySelectorAll('.wa-btn[data-id]').forEach(a=>{
+    a.addEventListener('click', ()=>{
+      const c = CASOS.find(x=>x.id===a.dataset.id);
+      // Registra la fecha del primer envío del mensaje predeterminado, sin bloquear
+      // la apertura de WhatsApp (el link sigue funcionando normalmente).
+      if(c && !c.fechaEnvioMensaje){
+        actualizarCaso(a.dataset.id, {fechaEnvioMensaje: todayStr()});
+      }
+    });
+  });
   tbody.querySelectorAll('.motivo-select').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
-      const c = CASOS.find(x=>x.id===sel.dataset.id);
-      c.motivo = sel.value;
-      c.fechaMotivoRiesgo = todayStr();
-      await saveCasos();
-      renderAll();
+      await actualizarCaso(sel.dataset.id, {motivo: sel.value, fechaMotivoRiesgo: todayStr()});
     });
   });
   tbody.querySelectorAll('.risk-select').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
-      const c = CASOS.find(x=>x.id===sel.dataset.id);
-      c.riesgo = sel.value;
-      c.fechaMotivoRiesgo = todayStr();
-      await saveCasos();
-      renderAll();
+      await actualizarCaso(sel.dataset.id, {riesgo: sel.value, fechaMotivoRiesgo: todayStr()});
     });
   });
   tbody.querySelectorAll('.seg-input').forEach(inp=>{
     inp.addEventListener('change', async ()=>{
-      const c = CASOS.find(x=>x.id===inp.dataset.id);
-      c.fechaSeguimiento = inp.value;
-      await saveCasos();
-      renderAll();
+      const anio = parseInt((inp.value||'').split('-')[0], 10);
+      if(inp.value && (anio < 2020 || anio > 2100)){
+        alert('La fecha ingresada no es válida (el año quedó mal escrito). Usá el ícono del calendario para elegirla en vez de escribirla a mano.');
+        const c = CASOS.find(x=>x.id===inp.dataset.id);
+        inp.value = c ? (c.fechaSeguimiento||'') : '';
+        return;
+      }
+      await actualizarCaso(inp.dataset.id, {fechaSeguimiento: inp.value});
     });
   });
   tbody.querySelectorAll('.obs-input').forEach(inp=>{
     inp.addEventListener('change', async ()=>{
-      const c = CASOS.find(x=>x.id===inp.dataset.id);
-      c.obs = inp.value;
-      await saveCasos();
+      await actualizarCaso(inp.dataset.id, {obs: inp.value});
+    });
+  });
+  tbody.querySelectorAll('.obs-save-btn').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const input = tbody.querySelector(`.obs-input[data-id="${btn.dataset.id}"]`);
+      await actualizarCaso(btn.dataset.id, {obs: input.value});
+      btn.classList.add('saved');
+      setTimeout(()=> btn.classList.remove('saved'), 1200);
     });
   });
   tbody.querySelectorAll('.estado-select').forEach(sel=>{
     sel.addEventListener('change', async ()=>{
-      const c = CASOS.find(x=>x.id===sel.dataset.id);
-      c.estado = sel.value;
-      await saveCasos();
-      renderAll();
+      await actualizarCaso(sel.dataset.id, {estado: sel.value});
     });
   });
   tbody.querySelectorAll('.del-btn').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       if(!confirm('¿Eliminar este socio de la planilla?')) return;
-      CASOS = CASOS.filter(x=>x.id!==btn.dataset.id);
-      await saveCasos();
-      renderAll();
+      await eliminarCaso(btn.dataset.id);
     });
   });
 
@@ -1051,6 +1139,7 @@ function renderAdminPanel(){
       <td><span class="badge sede">${c.sede||'—'}</span></td>
       <td class="client-sub">${c.subidoPor||'—'}${c.cargoSubidoPor?' · '+c.cargoSubidoPor:''}</td>
       <td class="client-sub">${fmt(c.fechaCarga)}</td>
+      <td class="client-sub">${fmt(c.fechaEnvioMensaje)}</td>
       <td class="client-sub">${c.motivo||'—'}</td>
       <td class="client-sub">${c.riesgo||'—'}</td>
       <td class="client-sub">${c.estado}</td>
@@ -1071,10 +1160,8 @@ document.getElementById('btn-admin-delete').addEventListener('click', async ()=>
   const ids = getAdminSelectedIds();
   if(!ids.length){ alert('Seleccioná al menos un socio.'); return; }
   if(!confirm(`¿Eliminar ${ids.length} socio(s) de la base? Esta acción no se puede deshacer.`)) return;
-  CASOS = CASOS.filter(c => !ids.includes(c.id));
-  await saveCasos();
+  await eliminarCasosEnLote(ids);
   renderAdminPanel();
-  renderAll();
 });
 
 document.getElementById('btn-admin-reasignar').addEventListener('click', async ()=>{
@@ -1082,11 +1169,9 @@ document.getElementById('btn-admin-reasignar').addEventListener('click', async (
   const nuevaSede = document.getElementById('admin-reasignar-sede').value.trim();
   if(!ids.length){ alert('Seleccioná al menos un socio.'); return; }
   if(!nuevaSede){ alert('Escribí la sede de destino.'); return; }
-  CASOS.forEach(c => { if(ids.includes(c.id)) c.sede = nuevaSede; });
-  await saveCasos();
+  await reasignarSedeEnLote(ids, nuevaSede);
   document.getElementById('admin-reasignar-sede').value = '';
   renderAdminPanel();
-  renderAll();
 });
 
 document.getElementById('btn-admin-export').addEventListener('click', ()=>{
@@ -1096,17 +1181,18 @@ document.getElementById('btn-admin-export').addEventListener('click', ()=>{
 // ---------- init ----------
 async function init(){
   document.getElementById('fecha-hoy').textContent = new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  AJUSTES = await loadAjustes();
+  AJUSTES = loadAjustes();
   document.getElementById('input-gerente').value = AJUSTES.gerente || '';
   document.getElementById('input-cargo').value = AJUSTES.cargo || '';
   document.getElementById('input-sede').value = AJUSTES.sede || '';
-  CASOS = await loadCasos();
   SOCIOS_TOTALES = await loadSociosTotales();
-  if(!CASOS.length){
-    document.getElementById('bo-body').classList.add('open');
-    document.getElementById('bo-toggle').classList.add('open');
-  }
-  renderAll();
+  iniciarSincronizacionCasos(()=>{
+    if(!CASOS.length){
+      document.getElementById('bo-body').classList.add('open');
+      document.getElementById('bo-toggle').classList.add('open');
+    }
+    renderAll();
+  });
 }
 init();
 </script>
